@@ -572,7 +572,7 @@
 
 @media (max-width: 768px) {
   .land-back-section {
-    padding: 4rem 1.5rem;
+    padding: 0rem 1.5rem;
   }
   .land-back-section__title {
     font-size: clamp(2rem, 8vw, 2.6rem);
