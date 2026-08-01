@@ -1961,3 +1961,76 @@ function revealPageHeroTitle() {
     links.forEach((l) => l.classList.remove("is-active"));
   });
 })();
+
+// ── VIDEO SECTION PARALLAX (supports multiple instances) ──
+(function () {
+  const imgs = document.querySelectorAll(".js-parallax-img");
+  if (!imgs.length) return;
+
+  const items = Array.from(imgs)
+    .map((img) => {
+      const wrap = img.closest(".video-wrap");
+      return wrap ? { img, wrap } : null;
+    })
+    .filter(Boolean);
+
+  function update() {
+    items.forEach(({ img, wrap }) => {
+      const rect = wrap.getBoundingClientRect();
+      const total = window.innerHeight + wrap.offsetHeight;
+      const scrolled = window.innerHeight - rect.top;
+      const progress = Math.max(0, Math.min(1, scrolled / total));
+      const offset = (progress - 0.5) * 100;
+      img.style.transform = `translateY(${offset}px)`;
+    });
+  }
+
+  window.addEventListener("scroll", () => requestAnimationFrame(update), {
+    passive: true,
+  });
+  window.addEventListener("resize", () => requestAnimationFrame(update));
+  update();
+})();
+
+// ── SUITE SECTION PARALLAX (main image + side image + content counter-move) ──
+(function () {
+  const img = document.getElementById("suiteImg");
+  const wrap = img ? img.closest(".suite-section__media") : null;
+  const sideImg = document.getElementById("suiteSideImg");
+  const sideWrap = sideImg ? sideImg.closest(".suite-section__side") : null;
+  const content = document.getElementById("suiteContent");
+
+  if (!wrap && !sideWrap && !content) return;
+
+  function update() {
+    const isMobile = window.innerWidth <= 768;
+
+    if (wrap && img) {
+      const rect = wrap.getBoundingClientRect();
+      const total = window.innerHeight + wrap.offsetHeight;
+      const scrolled = window.innerHeight - rect.top;
+      const progress = Math.max(0, Math.min(1, scrolled / total));
+      img.style.transform = `translateY(${(progress - 0.5) * 80}px)`;
+
+      if (content) {
+        content.style.transform = isMobile
+          ? "none"
+          : `translateY(${(progress - 0.5) * -25}px)`;
+      }
+    }
+
+    if (sideWrap && sideImg) {
+      const rect = sideWrap.getBoundingClientRect();
+      const total = window.innerHeight + sideWrap.offsetHeight;
+      const scrolled = window.innerHeight - rect.top;
+      const progress = Math.max(0, Math.min(1, scrolled / total));
+      sideImg.style.transform = `translateY(${(progress - 0.5) * 60}px)`;
+    }
+  }
+
+  window.addEventListener("scroll", () => requestAnimationFrame(update), {
+    passive: true,
+  });
+  window.addEventListener("resize", () => requestAnimationFrame(update));
+  update();
+})();
