@@ -1834,13 +1834,13 @@ function revealPageHeroTitle() {
     });
   });
 })();
-
 // ── CRAFTING YOUR STAY: hover-reveal activity images ──
 (function () {
   const wrap = document.getElementById("craftListWrap");
   const imgBox = document.getElementById("craftHoverImg");
   const imgTag = document.getElementById("craftHoverImgTag");
-  if (!wrap || !imgBox || !imgTag) return;
+  const listEl = document.getElementById("craftList");
+  if (!wrap || !imgBox || !imgTag || !listEl) return;
 
   const links = wrap.querySelectorAll(".craft-link");
   if (!links.length) return;
@@ -1877,6 +1877,7 @@ function revealPageHeroTitle() {
       imgBox.style.left = relativeLeft + "px";
       imgBox.classList.add("is-visible");
 
+      listEl.classList.add("is-hovering");
       links.forEach((l) => l.classList.remove("is-active"));
       link.classList.add("is-active");
     });
@@ -1884,6 +1885,7 @@ function revealPageHeroTitle() {
 
   wrap.addEventListener("mouseleave", () => {
     imgBox.classList.remove("is-visible");
+    listEl.classList.remove("is-hovering");
     links.forEach((l) => l.classList.remove("is-active"));
   });
 })();
