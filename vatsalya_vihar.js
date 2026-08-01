@@ -1409,3 +1409,428 @@ function revealPageHeroTitle() {
       }
     });
 })();
+
+/* ==========================================================================
+   CURATED HERO — behaviour
+   1. Assign each floating card a unique drift distance / rotation / scale
+      / duration / delay so nothing moves in sync.
+   2. Play a staggered entrance the first time the section enters view:
+      heading first, images next, CTA last.
+   3. Add a very subtle mouse parallax (desktop only) and scroll parallax,
+      both applied to a nested wrapper so they never fight the CSS
+      floating-drift animation running on the outer card.
+   ========================================================================== */
+
+(function () {
+  "use strict";
+
+  const section = document.getElementById("curatedHero");
+  if (!section) return;
+
+  const content = section.querySelector(".curated-hero__content");
+  const cards = Array.from(section.querySelectorAll(".floating-img"));
+  const isCoarsePointer = window.matchMedia("(pointer: coarse)").matches;
+  const prefersReducedMotion = window.matchMedia(
+    "(prefers-reduced-motion: reduce)",
+  ).matches;
+
+  /* ------------------------------------------------------------------
+     Helpers
+     ------------------------------------------------------------------ */
+
+  function rand(min, max) {
+    return Math.random() * (max - min) + min;
+  }
+
+  // Random signed distance, e.g. rand between 20 and 60, then randomly +/-
+  function randSigned(min, max) {
+    const v = rand(min, max);
+    return Math.random() < 0.5 ? -v : v;
+  }
+
+  /* ------------------------------------------------------------------
+     1. Randomize each card's floating-drift parameters via CSS custom
+        properties. The single @keyframes chFloatDrift in the stylesheet
+        reads these, so every card still shares one keyframe definition
+        but animates uniquely.
+     ------------------------------------------------------------------ */
+
+  function initFloatParams() {
+    cards.forEach((card) => {
+      const dx = randSigned(20, 60); // horizontal drift 20-60px
+      const dy = randSigned(20, 60); // vertical drift 20-60px
+      const drot = randSigned(1, 3); // rotation -3deg to 3deg
+      const dscale = rand(0.98, 1.03); // gentle scale for depth
+      const duration = rand(8, 18); // 8-18s, unique per card
+      const delay = rand(-6, 2); // negative delay desyncs starting phase
+
+      card.style.setProperty("--dx", dx.toFixed(1) + "px");
+      card.style.setProperty("--dy", dy.toFixed(1) + "px");
+      card.style.setProperty("--drot", drot.toFixed(2) + "deg");
+      card.style.setProperty("--dscale", dscale.toFixed(3));
+      card.style.animationDuration = duration.toFixed(2) + "s";
+      card.style.animationDelay = delay.toFixed(2) + "s";
+    });
+  }
+
+  /* ------------------------------------------------------------------
+     2. Entrance sequence, triggered once when the section scrolls
+        into view. Heading fades in first, image cards follow with a
+        random stagger, CTA arrives last.
+     ------------------------------------------------------------------ */
+
+  function playEntrance() {
+    // Heading + content wrapper: no extra delay, leads the sequence.
+    content.classList.add("is-visible");
+
+    // Image cards: staggered, randomized so the reveal itself feels organic.
+    cards.forEach((card, i) => {
+      const baseStagger = 90; // ms between cards, roughly
+      const jitter = rand(0, 160);
+      const entranceDelay = i * baseStagger + jitter;
+
+      window.setTimeout(() => {
+        card.classList.add("is-visible");
+
+        // Once the entrance transition finishes, hand off to the
+        // continuous floating-drift animation.
+        const startFloating = () => card.classList.add("is-floating");
+        if (prefersReducedMotion) {
+          startFloating();
+        } else {
+          card.addEventListener("transitionend", startFloating, {
+            once: true,
+          });
+        }
+      }, entranceDelay);
+    });
+
+    // CTA fades in last, after the images have had time to start landing.
+    const cta = section.querySelector(".curated-hero__cta");
+    const ctaDelay = cards.length * 90 + 350;
+    window.setTimeout(() => {
+      if (cta) cta.style.transitionDelay = "0s";
+    }, ctaDelay);
+  }
+
+  function initEntranceObserver() {
+    if (!("IntersectionObserver" in window)) {
+      playEntrance();
+      return;
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            playEntrance();
+            observer.disconnect();
+          }
+        });
+      },
+      { threshold: 0.25 },
+    );
+    observer.observe(section);
+  }
+
+  /* ------------------------------------------------------------------
+     3a. Mouse parallax — desktop only, very subtle (max ~18px), applied
+         to the .floating-img__inner wrapper so it composes independently
+         of the outer card's floating-drift animation.
+     ------------------------------------------------------------------ */
+
+  let latestMouseX = 0;
+  let latestMouseY = 0;
+  let mouseRAFQueued = false;
+
+  function applyMouseParallax() {
+    mouseRAFQueued = false;
+    cards.forEach((card) => {
+      const depth = parseFloat(card.dataset.depth || "0.4");
+      const inner = card.querySelector(".floating-img__inner");
+      if (!inner) return;
+
+      const maxShift = 18; // px, keeps the effect luxuriously subtle
+      const mx = latestMouseX * maxShift * depth;
+      const my = latestMouseY * maxShift * depth;
+
+      inner.style.transform =
+        "translate3d(" + mx.toFixed(1) + "px," + my.toFixed(1) + "px,0)";
+    });
+  }
+
+  function onMouseMove(e) {
+    const rect = section.getBoundingClientRect();
+    // Normalize to -1..1 relative to section center.
+    latestMouseX = ((e.clientX - rect.left) / rect.width - 0.5) * 2;
+    latestMouseY = ((e.clientY - rect.top) / rect.height - 0.5) * 2;
+
+    if (!mouseRAFQueued) {
+      mouseRAFQueued = true;
+      requestAnimationFrame(applyMouseParallax);
+    }
+  }
+
+  function initMouseParallax() {
+    if (isCoarsePointer || prefersReducedMotion) return; // touch devices: skip
+    section.addEventListener("mousemove", onMouseMove, { passive: true });
+    section.addEventListener("mouseleave", () => {
+      latestMouseX = 0;
+      latestMouseY = 0;
+      requestAnimationFrame(applyMouseParallax);
+    });
+  }
+
+  /* ------------------------------------------------------------------
+     3b. Scroll parallax — cards drift at different speeds as the
+         section passes through the viewport. The centered content
+         block is left untouched so it always reads as stable.
+     ------------------------------------------------------------------ */
+
+  let scrollRAFQueued = false;
+
+  function applyScrollParallax() {
+    scrollRAFQueued = false;
+    const rect = section.getBoundingClientRect();
+    const viewportH =
+      window.innerHeight || document.documentElement.clientHeight;
+
+    // Progress goes from -1 (section below viewport) to 1 (section above),
+    // 0 when the section is centered in the viewport.
+    const progress =
+      ((rect.top + rect.height / 2) / (viewportH + rect.height)) * 2 - 1;
+
+    cards.forEach((card) => {
+      const speed = parseFloat(card.dataset.speed || "0.2");
+      const shift = progress * speed * 120; // px, kept gentle
+      card.style.setProperty("--scroll-shift", shift.toFixed(1) + "px");
+      // Combine with any existing floating animation transform by
+      // nudging the card's base position via a CSS variable read from
+      // a lightweight top-level transform layer.
+      card.style.translate = "0 " + shift.toFixed(1) + "px";
+    });
+  }
+
+  function onScroll() {
+    if (!scrollRAFQueued) {
+      scrollRAFQueued = true;
+      requestAnimationFrame(applyScrollParallax);
+    }
+  }
+
+  function initScrollParallax() {
+    if (prefersReducedMotion) return;
+    window.addEventListener("scroll", onScroll, { passive: true });
+    applyScrollParallax();
+  }
+
+  /* ------------------------------------------------------------------
+     Boot
+     ------------------------------------------------------------------ */
+
+  initFloatParams();
+  initEntranceObserver();
+  initMouseParallax();
+  initScrollParallax();
+})();
+
+// ── GALLERY STREAM: ENDLESS-FLOWING MASONRY PARALLAX ──
+// Cards live in normal flow (flex column). The only motion is a
+// transform on each column's track, computed from scroll position and
+// wrapped (modulo) against the height of one full card-set — so the
+// stream never runs out, and never needs to add/remove DOM nodes.
+(function () {
+  "use strict";
+
+  const section = document.getElementById("galleryStream");
+  const viewport = section
+    ? section.querySelector(".gallery-stream__viewport")
+    : null;
+  const columnEls = section
+    ? Array.from(section.querySelectorAll(".gallery-column"))
+    : [];
+  if (!section || !viewport || !columnEls.length) return;
+
+  const prefersReducedMotion = window.matchMedia(
+    "(prefers-reduced-motion: reduce)",
+  ).matches;
+
+  // One pool of images per column, so neighbouring columns never show
+  // the same photo at the same height. Swap these for real photography —
+  // nothing else in the HTML needs to change.
+  const COLUMN_IMAGES = [
+    [
+      { seed: "vv-beach-walker", caption: "Swim & Surf" },
+      { seed: "vv-orchard-path", caption: "Farm Walks" },
+      { seed: "vv-coastal-hike", caption: "Coastal Hikes" },
+      { seed: "vv-lawn-games", caption: "Lawn Games" },
+      { seed: "vv-island-tour", caption: "Island Tours" },
+    ],
+    [
+      { seed: "vv-ebiking", caption: "E-Biking" },
+      { seed: "vv-surf-lesson", caption: "Surf Lessons" },
+      { seed: "vv-glass-boat", caption: "Glass Bottom Boat" },
+      { seed: "vv-hot-spring", caption: "Geo-Thermal Pools" },
+      { seed: "vv-hahei-cove", caption: "Cathedral Cove" },
+    ],
+    [
+      { seed: "vv-day-tour", caption: "Personalised Tours" },
+      { seed: "vv-ocean-dive", caption: "Ocean Adventures" },
+      { seed: "vv-farm-table", caption: "Farm-to-Table" },
+      { seed: "vv-kauri-forest", caption: "Kauri Forest" },
+      { seed: "vv-chocolate", caption: "Chocolate Tour" },
+    ],
+    [
+      { seed: "vv-sunset-sail", caption: "Sunset Sailing" },
+      { seed: "vv-kayak-cove", caption: "Kayaking" },
+      { seed: "vv-mountain-bike", caption: "Mountain Biking" },
+      { seed: "vv-picnic-hill", caption: "Hilltop Picnics" },
+      { seed: "vv-fireside", caption: "Fireside Evenings" },
+    ],
+  ];
+
+  // Slightly vary each card's shape across a set for a genuine masonry
+  // feel — still just aspect-ratio in CSS, still fully in flow.
+  const SHAPES = ["", "gallery-card--tall", "", "gallery-card--short", ""];
+
+  function buildCardEl(item, shapeClass) {
+    const card = document.createElement("figure");
+    card.className = "gallery-card" + (shapeClass ? " " + shapeClass : "");
+
+    // Small, static, one-time jitter baked directly onto the card's
+    // own transform — independent of the scroll-driven transform that
+    // will live on the ancestor .gallery-column__track.
+    const jitter = (Math.random() - 0.5) * 36; // ±18px
+    card.style.transform = "translate3d(0," + jitter.toFixed(1) + "px,0)";
+
+    const bg = document.createElement("div");
+    bg.className = "gallery-card__caption-bg";
+
+    const img = document.createElement("img");
+    img.src = "https://picsum.photos/seed/" + item.seed + "/700/900";
+    img.alt = item.caption;
+    img.loading = "lazy";
+
+    const caption = document.createElement("figcaption");
+    caption.className = "gallery-card__caption";
+    caption.textContent = item.caption;
+
+    card.appendChild(bg);
+    card.appendChild(img);
+    card.appendChild(caption);
+    return card;
+  }
+
+  function buildSet(images) {
+    const set = document.createElement("div");
+    set.className = "gallery-column__set";
+    images.forEach((item, i) => {
+      set.appendChild(buildCardEl(item, SHAPES[i % SHAPES.length]));
+    });
+    return set;
+  }
+
+  // Build each column: a track containing TWO identical sets back to
+  // back. Once the track has scrolled up by exactly one set's height,
+  // it is reset to 0 — visually seamless, because set two is now
+  // sitting exactly where set one started.
+  const columns = columnEls.map((col, i) => {
+    const speed = parseFloat(col.dataset.speed || "0.5");
+    const images = COLUMN_IMAGES[i % COLUMN_IMAGES.length];
+
+    const track = document.createElement("div");
+    track.className = "gallery-column__track";
+
+    const setA = buildSet(images);
+    const setB = buildSet(images);
+    setB.setAttribute("aria-hidden", "true");
+
+    track.appendChild(setA);
+    track.appendChild(setB);
+    col.appendChild(track);
+
+    // Wrap every <img> in this column in a parallax layer so the
+    // image can lag behind its card independently of the hover-zoom.
+    const layers = Array.from(track.querySelectorAll(".gallery-card")).map(
+      (card) => {
+        const img = card.querySelector("img");
+        const layer = document.createElement("div");
+        layer.className = "gallery-parallax-layer";
+        card.insertBefore(layer, img);
+        layer.appendChild(img);
+        return layer;
+      },
+    );
+
+    return { col, track, setA, speed, layers, baseHeight: 0 };
+  });
+
+  const IMAGE_LAG_RATIO = 0.6; // inner image travels at ~60% of its column's speed
+
+  function measure() {
+    columns.forEach((c) => {
+      // Height of ONE set (+ the gap that would sit between the
+      // looped repeat) is the modulo period for a seamless wrap.
+      const gap = parseFloat(getComputedStyle(c.track).gap || "24") || 24;
+      c.baseHeight = c.setA.getBoundingClientRect().height + gap;
+    });
+  }
+
+  function isMobile() {
+    return window.innerWidth <= 900;
+  }
+
+  function update() {
+    if (isMobile() || prefersReducedMotion) {
+      columns.forEach((c) => {
+        c.track.style.transform = "";
+        c.layers.forEach((l) => (l.style.transform = ""));
+      });
+      return;
+    }
+
+    const rect = section.getBoundingClientRect();
+    // How far we've scrolled into the pinned section, clamped to its
+    // scrollable range (section height minus the pinned viewport).
+    const scrollable = Math.max(1, section.offsetHeight - window.innerHeight);
+    const scrolledIn = Math.max(0, Math.min(scrollable, -rect.top));
+
+    columns.forEach((c) => {
+      if (!c.baseHeight) return;
+      const raw = scrolledIn * c.speed;
+      const trackY = -(raw % c.baseHeight);
+
+      c.track.style.transform = "translate3d(0," + trackY.toFixed(2) + "px,0)";
+
+      // Every image in this column lags behind its own card by the
+      // same ratio, using the column's current shift.
+      const imageLocalY = trackY * IMAGE_LAG_RATIO - trackY;
+      const layerTransform =
+        "translate3d(0," + imageLocalY.toFixed(2) + "px,0)";
+      c.layers.forEach((l) => (l.style.transform = layerTransform));
+    });
+  }
+
+  // Measure after layout has settled (fonts/images affect box sizes
+  // only via aspect-ratio here, so one rAF pass is enough).
+  requestAnimationFrame(() => {
+    measure();
+    update();
+  });
+
+  // Reuse the site's existing smooth-scroll hook instead of adding a
+  // new scroll listener.
+  if (typeof onSmoothScroll === "function") {
+    onSmoothScroll(update);
+  } else {
+    window.addEventListener("scroll", () => requestAnimationFrame(update), {
+      passive: true,
+    });
+  }
+
+  window.addEventListener("resize", () => {
+    requestAnimationFrame(() => {
+      measure();
+      update();
+    });
+  });
+})();
