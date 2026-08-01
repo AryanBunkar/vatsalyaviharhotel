@@ -3364,7 +3364,6 @@ body.reveal-active {
 .craft-section__list-wrap {
   position: relative;
 }
-
 .craft-section__list {
   font-family: "Editorial Old", serif;
   font-weight: 300;
@@ -3375,16 +3374,21 @@ body.reveal-active {
 }
 
 .craft-link {
-  color: rgba(26, 18, 8, 0.25);
+  color: #1a1208; /* default: fully dark, no fade */
   text-decoration: none;
   cursor: pointer;
   transition: color 0.35s ease;
 }
-.craft-link:hover,
-.craft-link.is-active {
-  color: #1a1208;
+
+/* once ANY link in the list is being hovered, fade everything... */
+.craft-section__list.is-hovering .craft-link {
+  color: rgba(26, 18, 8, 0.25);
 }
 
+/* ...except the one actually being hovered */
+.craft-section__list.is-hovering .craft-link.is-active {
+  color: #1a1208;
+}
 /* floating hover image */
 .craft-hover-img {
   position: absolute;
