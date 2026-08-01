@@ -1857,24 +1857,28 @@ function revealPageHeroTitle() {
     }
 
     const rect = section.getBoundingClientRect();
-    // How far we've scrolled into the pinned section, clamped to its
-    // scrollable range (section height minus the pinned viewport).
     const scrollable = Math.max(1, section.offsetHeight - window.innerHeight);
     const scrolledIn = Math.max(0, Math.min(scrollable, -rect.top));
+    const viewportH = window.innerHeight;
+    const maxImageShift = 60; // px — safely inside the card's clipped bounds
 
     columns.forEach((c) => {
       if (!c.baseHeight) return;
       const raw = scrolledIn * c.speed;
       const trackY = -(raw % c.baseHeight);
-
       c.track.style.transform = "translate3d(0," + trackY.toFixed(2) + "px,0)";
 
-      // Every image in this column lags behind its own card by the
-      // same ratio, using the column's current shift.
-      const imageLocalY = trackY * IMAGE_LAG_RATIO - trackY;
-      const layerTransform =
-        "translate3d(0," + imageLocalY.toFixed(2) + "px,0)";
-      c.layers.forEach((l) => (l.style.transform = layerTransform));
+      // Per-card lag: each image gets its own small, clamped offset based
+      // on where ITS card sits in the viewport right now — not the
+      // column's (much larger) cumulative shift.
+      c.layers.forEach((layer) => {
+        const cardRect = layer.parentElement.getBoundingClientRect();
+        const cardCenter = cardRect.top + cardRect.height / 2;
+        const progress = (cardCenter - viewportH / 2) / viewportH;
+        const clamped = Math.max(-1, Math.min(1, progress));
+        const shift = clamped * maxImageShift;
+        layer.style.transform = "translate3d(0," + shift.toFixed(2) + "px,0)";
+      });
     });
   }
 
