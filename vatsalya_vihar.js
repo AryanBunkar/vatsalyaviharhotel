@@ -1834,3 +1834,56 @@ function revealPageHeroTitle() {
     });
   });
 })();
+
+// ── CRAFTING YOUR STAY: hover-reveal activity images ──
+(function () {
+  const wrap = document.getElementById("craftListWrap");
+  const imgBox = document.getElementById("craftHoverImg");
+  const imgTag = document.getElementById("craftHoverImgTag");
+  if (!wrap || !imgBox || !imgTag) return;
+
+  const links = wrap.querySelectorAll(".craft-link");
+  if (!links.length) return;
+
+  function isTouch() {
+    return window.matchMedia("(max-width: 900px)").matches;
+  }
+
+  links.forEach((link) => {
+    link.addEventListener("mouseenter", () => {
+      if (isTouch()) return;
+      const src = link.dataset.img;
+      if (!src) return;
+
+      imgTag.src = src;
+      imgTag.alt = link.textContent.trim();
+
+      const linkRect = link.getBoundingClientRect();
+      const wrapRect = wrap.getBoundingClientRect();
+      const boxW = imgBox.offsetWidth;
+      const boxH = imgBox.offsetHeight;
+
+      // vertical: center the image on the hovered word's line
+      let relativeTop =
+        linkRect.top - wrapRect.top + linkRect.height / 2 - boxH / 2;
+      relativeTop = Math.max(0, Math.min(relativeTop, wrapRect.height - boxH));
+
+      // horizontal: start just after the word itself, so the box
+      // reads as "attached" to it, then clamp inside the container
+      let relativeLeft = linkRect.left - wrapRect.left + linkRect.width * 0.4;
+      relativeLeft = Math.max(0, Math.min(relativeLeft, wrapRect.width - boxW));
+
+      imgBox.style.top = relativeTop + "px";
+      imgBox.style.left = relativeLeft + "px";
+      imgBox.classList.add("is-visible");
+
+      links.forEach((l) => l.classList.remove("is-active"));
+      link.classList.add("is-active");
+    });
+  });
+
+  wrap.addEventListener("mouseleave", () => {
+    imgBox.classList.remove("is-visible");
+    links.forEach((l) => l.classList.remove("is-active"));
+  });
+})();
