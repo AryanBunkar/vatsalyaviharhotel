@@ -315,6 +315,7 @@
      against. More height = more scroll distance before the columns
      have moved through their full range. Tune to taste. */
   height: 320vh;
+  padding-bottom: 6vh;
 }
 
 /* Pinned viewport: stays glued to the top of the window for the
