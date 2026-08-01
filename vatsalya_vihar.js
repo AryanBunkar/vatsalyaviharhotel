@@ -786,13 +786,14 @@ initLuxCarousel({
   ],
 });
 
-// ── ROOMS SHOWCASE (crossfade + active dot) ──
+// ── ROOMS SHOWCASE (crossfade + title reveal + active dot) ──
 (function () {
   const nav = document.getElementById("roomsNav");
   const titleEl = document.getElementById("roomsTitle");
+  const section = document.getElementById("roomsSection");
   const bgA = document.getElementById("roomsBgA");
   const bgB = document.getElementById("roomsBgB");
-  if (!nav || !titleEl || !bgA || !bgB) return;
+  if (!nav || !titleEl || !bgA || !bgB || !section) return;
 
   const ROOMS = [
     {
@@ -829,18 +830,73 @@ initLuxCarousel({
 
   const items = Array.from(nav.querySelectorAll(".rooms-section__item"));
   let activeIndex = 0;
-  let showingA = true; // tracks which <img> layer is currently on top
+  let showingA = true;
+
+  const prefersReducedMotion = window.matchMedia(
+    "(prefers-reduced-motion: reduce)",
+  ).matches;
+
+  // ── same char-by-char builder used by book-section / quote-section ──
+  function buildChars(container, text, isItalic) {
+    text.split("").forEach((ch) => {
+      const s = document.createElement("span");
+      s.className = "quote-char" + (isItalic ? " quote-char--italic" : "");
+      s.innerHTML = ch === " " ? "&nbsp;" : ch;
+      container.appendChild(s);
+    });
+  }
+
+  // walks a room's title HTML (which contains <em> and <br/>) and rebuilds
+  // it as .quote-char spans + real <br> tags, so the emphasis/line-break
+  // structure is kept while every letter becomes individually revealable
+  function buildTitleChars(el, html) {
+    const temp = document.createElement("div");
+    temp.innerHTML = html;
+    el.innerHTML = "";
+
+    function walk(node, isItalic) {
+      node.childNodes.forEach((child) => {
+        if (child.nodeType === Node.TEXT_NODE) {
+          buildChars(el, child.textContent, isItalic);
+        } else if (child.tagName === "EM") {
+          walk(child, true);
+        } else if (child.tagName === "BR") {
+          el.appendChild(document.createElement("br"));
+        } else {
+          walk(child, isItalic);
+        }
+      });
+    }
+    walk(temp, false);
+  }
+
+  function revealTitle(el, startDelay = 0, charDelay = 40) {
+    const chars = el.querySelectorAll(".quote-char");
+    if (prefersReducedMotion) {
+      chars.forEach((c) => c.classList.add("revealed"));
+      return;
+    }
+    chars.forEach((ch, i) => {
+      ch.classList.remove("revealed");
+      void ch.offsetWidth; // force reflow so it replays on repeat triggers
+      setTimeout(
+        () => ch.classList.add("revealed"),
+        startDelay + i * charDelay,
+      );
+    });
+  }
+
+  // build once on load so nothing "pops" as plain text before JS runs
+  buildTitleChars(titleEl, ROOMS[activeIndex].title);
 
   function goTo(index) {
     if (index === activeIndex) return;
     const room = ROOMS[index];
 
-    // fade the title text out/in
-    titleEl.style.opacity = "0";
-    setTimeout(() => {
-      titleEl.innerHTML = room.title;
-      titleEl.style.opacity = "1";
-    }, 250);
+    // title: rebuild + replay the exact char-reveal from book-section,
+    // instead of the old opacity fade
+    buildTitleChars(titleEl, room.title);
+    revealTitle(titleEl, 0, 40);
 
     // crossfade: load new image into the hidden layer, then swap
     const nextLayer = showingA ? bgB : bgA;
@@ -853,11 +909,7 @@ initLuxCarousel({
       showingA = !showingA;
     };
 
-    // update active states
-    items.forEach((item, i) => {
-      item.classList.toggle("is-active", i === index);
-    });
-
+    items.forEach((item, i) => item.classList.toggle("is-active", i === index));
     activeIndex = index;
   }
 
@@ -867,6 +919,22 @@ initLuxCarousel({
       goTo(index);
     });
   });
+
+  // ── play the entrance reveal once, the first time the section scrolls into view ──
+  let hasEntered = false;
+  const observer = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting && !hasEntered) {
+          hasEntered = true;
+          revealTitle(titleEl, 0, 40);
+          observer.disconnect();
+        }
+      });
+    },
+    { threshold: 0.35 },
+  );
+  observer.observe(section);
 })();
 
 (function () {
